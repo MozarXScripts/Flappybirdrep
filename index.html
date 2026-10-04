@@ -1,1 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flappy Bird</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #70c5ce;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+  }
+  canvas {
+    background: #70c5ce;
+    display: block;
+    border: 4px solid #333;
+    image-rendering: pixelated;
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="320" height="480"></canvas>
 
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ---------- Game State ----------
+let state = 'start'; // start, playing, over
+let frame = 0;
+let score = 0;
+let best = parseInt(localStorage.getItem('flappyBest') || '0', 10);
+
+// ---------- Ground ----------
+const groundHeight = 70;
+let groundX = 0;
+
+// ---------- Bird ----------
+const bird = {
+  x: 60,
+  y: H / 2,
+  w: 30,
+  h: 24,
+  velocity: 0,
+  gravity: 0.4,
+  flapPower: -7,
+  rotation: 0
+};
+
+function resetBird() {
+  bird.y = H / 2;
+  bird.velocity = 0;
+  bird.rotation = 0;
+}
+
+// ---------- Pipes ----------
+const pipeWidth = 52;
+const pipeGap = 130;
+let pipes = [];
+let pipeTimer = 0;
+const pipeInterval = 90;
+const pipeSpeed = 2.2;
+
+function resetPipes() {
+  pipes = [];
+  pipeTimer = 0;
+}
+
+function addPipe() {
+  const minTop = 50;
+  const maxTop = H - groundHeight - pipeGap - 50;
+  const topHeight = Math.random() * (maxTop - minTop) + minTop;
+  pipes.push({
+    x: W,
+    top: topHeight,
+    bottom: topHeight + pipeGap,
+    passed: false
+  });
+}
+
+// ---------- Input ----------
+function flap() {
+  if (state === 'start') {
+    state = 'playing';
+    resetBird();
+    resetPipes();
+    score = 0;
+  }
+  if (state === 'playing') {
+    bird.velocity = bird.flapPower;
+  }
+  if (state === 'over') {
+    state = 'start';
+    resetBird();
+    resetPipes();
+    score = 0;
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); flap(); }
+});
+canvas.addEventListener('mousedown', flap);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); });
+
+// ---------- Drawing ----------
+function drawBackground() {
+  // sky
+  ctx.fillStyle = '#70c5ce';
+  ctx.fillRect(0, 0, W, H);
+
+  // simple cloud/city silhouette
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  for (let i = 0; i < 5; i++) {
+    const cx = (i * 90 - (frame * 0.3) % 450);
+    ctx.beginPath();
+    ctx.ellipse(cx, 90, 30, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawGround() {
+  const groundY = H - groundHeight;
+  // dirt
+  ctx.fillStyle = '#ded895';
+  ctx.fillRect(0, groundY, W, groundHeight);
+  // grass strip
+  ctx.fillStyle = '#7ac142';
+  ctx.fillRect(0, groundY, W, 14);
+  ctx.strokeStyle = '#3a3a3a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(W, groundY);
+  ctx.stroke();
+
+  // moving stripes on dirt for parallax
+  ctx.fillStyle = '#c9c080';
+  const stripeW = 20;
+  let gx = -(groundX % stripeW);
+  while (gx < W) {
+    ctx.fillRect(gx, groundY + 20, 10, groundHeight - 20);
+    gx += stripeW;
+  }
+}
+
+function drawPipes() {
+  ctx.fillStyle = '#6cbf4a';
+  ctx.strokeStyle = '#3a3a3a';
+  ctx.lineWidth = 3;
+  const groundY = H - groundHeight;
+
+  pipes.forEach(p => {
+    // top pipe
+    ctx.fillRect(p.x, 0, pipeWidth, p.top);
+    ctx.strokeRect(p.x, 0, pipeWidth, p.top);
+    ctx.fillRect(p.x - 4, p.top - 20, pipeWidth + 8, 20);
+    ctx.strokeRect(p.x - 4, p.top - 20, pipeWidth + 8, 20);
+
+    // bottom pipe
+    const bottomHeight = groundY - p.bottom;
+    ctx.fillRect(p.x, p.bottom, pipeWidth, bottomHeight);
+    ctx.strokeRect(p.x, p.bottom, pipeWidth, bottomHeight);
+    ctx.fillRect(p.x - 4, p.bottom, pipeWidth + 8, 20);
+    ctx.strokeRect(p.x - 4, p.bottom, pipeWidth + 8, 20);
+  });
+}
+
+function drawBird() {
+  ctx.save();
+  ctx.translate(bird.x + bird.w / 2, bird.y + bird.h /
